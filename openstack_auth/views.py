@@ -67,16 +67,17 @@ def login(request, template_name=None, extra_context=None, **kwargs):
     if requested_region in regions and requested_region != current_region:
         initial.update({'region': requested_region})
 
+    form_class = kwargs.get('form_class', forms.Login)
     if request.method == "POST":
         # NOTE(saschpe): Since https://code.djangoproject.com/ticket/15198,
         # the 'request' object is passed directly to AuthenticationForm in
         # django.contrib.auth.views#login:
         if django.VERSION >= (1, 6):
-            form = functional.curry(forms.Login)
+            form = functional.curry(form_class)
         else:
-            form = functional.curry(forms.Login, request)
+            form = functional.curry(form_class, request)
     else:
-        form = functional.curry(forms.Login, initial=initial)
+        form = functional.curry(form_class, initial=initial)
 
     if extra_context is None:
         extra_context = {'redirect_field_name': auth.REDIRECT_FIELD_NAME}
@@ -103,7 +104,7 @@ def login(request, template_name=None, extra_context=None, **kwargs):
     # will erase it if we set it earlier.
     if request.user.is_authenticated():
         auth_user.set_session_from_user(request, request.user)
-        regions = dict(forms.Login.get_region_choices())
+        regions = dict(form_class.get_region_choices())
         region = request.user.endpoint
         region_name = regions.get(region)
         request.session['region_endpoint'] = region
