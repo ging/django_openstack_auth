@@ -47,7 +47,8 @@ LOG = logging.getLogger(__name__)
 @sensitive_post_parameters()
 @csrf_protect
 @never_cache
-def login(request, template_name=None, extra_context=None, **kwargs):
+def login(request, template_name=None, extra_context=None, 
+          form_class=forms.Login, **kwargs):
     """Logs a user in using the :class:`~openstack_auth.forms.Login` form."""
     if not request.is_ajax():
         # If the user is already authenticated, redirect them to the
@@ -67,7 +68,6 @@ def login(request, template_name=None, extra_context=None, **kwargs):
     if requested_region in regions and requested_region != current_region:
         initial.update({'region': requested_region})
 
-    form_class = kwargs.get('form_class', forms.Login)
     if request.method == "POST":
         # NOTE(saschpe): Since https://code.djangoproject.com/ticket/15198,
         # the 'request' object is passed directly to AuthenticationForm in
