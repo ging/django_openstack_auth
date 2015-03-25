@@ -25,7 +25,16 @@ LOG = logging.getLogger(__name__)
 
 
 def set_session_from_user(request, user):
-    request.session['token'] = user.token
+    # NOTE(garcianavalon) if the service catalog is big then the
+    # cookie gets over the max size of 4k set by browsers. Save only
+    # the identity service as a workaround, but a more robust solution
+    # is still needed
+    reduced_token = user.token
+    reduced_token.serviceCatalog = [
+        service for service in reduced_token.serviceCatalog
+        if service['type'] == 'identity'
+    ]
+    request.session['token'] = reduced_token
     request.session['user_id'] = user.id
     request.session['region_endpoint'] = user.endpoint
     request.session['services_region'] = user.services_region
