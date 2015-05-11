@@ -124,15 +124,18 @@ class KeystoneBackend(object):
             msg = _('You are not authorized for any projects.')
             raise exceptions.KeystoneAuthException(msg)
 
+        # NOTE(garcianavalon) this recent_project cookie gives a lot or problems
+        # when switching users so we don't use it anymore. Use the unscoped_auth_ref
+        # one instead by default
         # the recent project id a user might have set in a cookie
-        recent_project = None
-        if request:
-            # Check if token is automatically scoped to default_project
-            # grab the project from this token, to use as a default
-            # if no recent_project is found in the cookie
-            recent_project = request.COOKIES.get('recent_project',
-                                                 unscoped_auth_ref.project_id)
-
+        # recent_project = None
+        # if request:
+        #     # Check if token is automatically scoped to default_project
+        #     # grab the project from this token, to use as a default
+        #     # if no recent_project is found in the cookie
+        #     recent_project = request.COOKIES.get('recent_project',
+        #                                          unscoped_auth_ref.project_id)
+        recent_project = unscoped_auth_ref.project_id
         # if a most recent project was found, try using it first
         if recent_project:
             for pos, project in enumerate(projects):

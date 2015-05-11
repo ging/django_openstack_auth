@@ -197,8 +197,10 @@ def switch(request, tenant_id, redirect_field_name=auth.REDIRECT_FIELD_NAME):
             request, auth_user.Token(auth_ref), endpoint)
         auth_user.set_session_from_user(request, user)
     response = shortcuts.redirect(redirect_to)
-    utils.set_response_cookie(response, 'recent_project',
-                              request.user.project_id)
+    # NOTE(garcianavalon) this recent_project cookie gives a lot or problems
+    # when switching users so we don't use it anymore. Use the unscoped_auth_ref
+    # utils.set_response_cookie(response, 'recent_project',
+    #                           request.user.project_id)
     return response
 
 
