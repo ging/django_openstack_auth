@@ -135,9 +135,11 @@ def logout(request, login_url=None, **kwargs):
     if token and endpoint:
         delete_token(endpoint=endpoint, token_id=token.id)
     """ Securely logs a user out. """
-    return django_auth_views.logout_then_login(request, login_url=login_url,
-                                               **kwargs)
-
+    response = django_auth_views.logout_then_login(request, login_url=login_url,
+                                                   **kwargs)
+    # NOTE(garcianavalon) experimental!
+    response.delete_cookie(settings.SESSION_COOKIE_NAME)
+    return response
 
 def delete_token(endpoint, token_id):
     """Delete a token."""
