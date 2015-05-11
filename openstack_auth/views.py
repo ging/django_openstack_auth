@@ -94,11 +94,14 @@ def login(request, template_name=None, extra_context=None,
                                   authentication_form=form,
                                   extra_context=extra_context,
                                   **kwargs)
+
+    # NOTE(garcianavalon) we only allow one region to log in
+    # just remove the cookie to avoid issues
     # Save the region in the cookie, this is used as the default
     # selected region next time the Login form loads.
-    if request.method == "POST":
-        utils.set_response_cookie(res, 'login_region',
-                                  request.POST.get('region', ''))
+    # if request.method == "POST":
+    #     utils.set_response_cookie(res, 'login_region',
+    #                               request.POST.get('region', ''))
 
     # Set the session data here because django's session key rotation
     # will erase it if we set it earlier.

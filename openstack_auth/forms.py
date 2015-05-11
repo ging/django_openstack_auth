@@ -68,9 +68,13 @@ class Login(django_auth_forms.AuthenticationForm):
         if len(self.fields['region'].choices) == 1:
             self.fields['region'].initial = self.fields['region'].choices[0][0]
             self.fields['region'].widget = forms.widgets.HiddenInput()
+
+        # NOTE(garcianavalon) we only allow one region to log in
+        # just remove the cookie to avoid issues. Added default return value
+        # in case cookie is not set
         elif len(self.fields['region'].choices) > 1:
             self.fields['region'].initial = self.request.COOKIES.get(
-                'login_region')
+                'login_region', '')
 
     @staticmethod
     def get_region_choices():
