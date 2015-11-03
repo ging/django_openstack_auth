@@ -115,3 +115,11 @@ class Login(django_auth_forms.AuthenticationForm):
         if hasattr(self, 'check_for_test_cookie'):  # Dropped in django 1.7
             self.check_for_test_cookie()
         return self.cleaned_data
+
+
+class TwoFactorCodeForm(Login):
+    verification_code = forms.CharField(
+        label=("Insert your code"),
+        widget=forms.TextInput(attrs={"autofocus": "autofocus"}))
+    username = forms.CharField(widget=forms.HiddenInput())
+    password = forms.CharField(widget=forms.HiddenInput())
