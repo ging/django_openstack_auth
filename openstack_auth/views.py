@@ -10,8 +10,10 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import logging
 import time
+import uuid
 
 import django
 from django.conf import settings
@@ -78,10 +80,10 @@ def two_factor_login(request, template_name=None, extra_context=None,
 
     if not template_name:
         if request.is_ajax():
-            template_name = 'auth/_login.html'
+            template_name = 'auth/_two_factor_login.html'
             extra_context['hide'] = True
         else:
-            template_name = 'auth/login.html'
+            template_name = 'auth/two_factor_login.html'
 
     res = django_auth_views.login(request,
                                   template_name=template_name,
@@ -144,10 +146,16 @@ def login(request, template_name=None, extra_context=None,
 
         # NOTE(garcianavalon) two factor support. If the user has two factor
         # enabled, cache the (username, password) and redirect to two_factor_login
-        username = form.cleaned_data.get('username')
-        password = form.cleaned_data.get('password')
-        cache.set(username, password, 120)
-        shortcuts.redirect('two_factor_login')
+        # with the Key to retrieve them
+        
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        cache_key = uuid.uuid4().hex
+        cache.set(cache_key, (username, password), 120)
+
+        response = shortcuts.redirect('two_factor_login')
+        response['Location'] += '?k={k}'.format(k=cache_key)
+        return response
 
     else:
         form = functional.curry(form_class, initial=initial)
