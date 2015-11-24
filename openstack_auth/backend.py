@@ -65,9 +65,10 @@ class KeystoneBackend(object):
             return None
 
     def authenticate(self, request=None, username=None, password=None,
-                     user_domain_name=None, auth_url=None):
+                     user_domain_name=None, auth_url=None, verification_code=None):
         """Authenticates a user via the Keystone Identity API."""
         LOG.debug('Beginning user authentication for user "%s".' % username)
+
 
         interface = getattr(settings, 'OPENSTACK_ENDPOINT_TYPE', 'public')
 
@@ -81,7 +82,8 @@ class KeystoneBackend(object):
         unscoped_auth = utils.get_password_auth_plugin(auth_url,
                                                        username,
                                                        password,
-                                                       user_domain_name)
+                                                       user_domain_name,
+                                                       verification_code)
 
         try:
             unscoped_auth_ref = unscoped_auth.get_access(session)

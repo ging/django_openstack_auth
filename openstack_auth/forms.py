@@ -154,7 +154,8 @@ class TwoFactorCodeForm(Login):
                                            username=username,
                                            password=password,
                                            user_domain_name=domain,
-                                           auth_url=region)
+                                           auth_url=region,
+                                           verification_code=verification_code)
             msg = 'Login successful for user "%(username)s".' % \
                 {'username': username}
             LOG.info(msg)

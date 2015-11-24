@@ -23,6 +23,7 @@ from django.utils import decorators
 from django.utils import timezone
 from keystoneclient.auth.identity import v2 as v2_auth
 from keystoneclient.auth.identity import v3 as v3_auth
+from keystoneclient.v3.contrib.two_factor import auth as two_factor_auth
 from keystoneclient.auth import token_endpoint
 from keystoneclient import session
 from keystoneclient.v2_0 import client as client_v2
@@ -211,12 +212,13 @@ def fix_auth_url_version(auth_url):
     return auth_url
 
 
-def get_password_auth_plugin(auth_url, username, password, user_domain_name):
+def get_password_auth_plugin(auth_url, username, password, user_domain_name, verification_code):
     if get_keystone_version() >= 3:
-        return v3_auth.Password(auth_url=auth_url,
-                                username=username,
-                                password=password,
-                                user_domain_name=user_domain_name)
+        return two_factor_auth.TwoFactor(auth_url=auth_url,
+                                         username=username,
+                                         password=password,
+                                         user_domain_name=user_domain_name,
+                                         verification_code=verification_code)
 
     else:
         return v2_auth.Password(auth_url=auth_url,
