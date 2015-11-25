@@ -100,7 +100,6 @@ class Login(django_auth_forms.AuthenticationForm):
             return self.cleaned_data
 
         try:
-            import pdb; pdb.set_trace()
             self.user_cache = authenticate(request=self.request,
                                            username=username,
                                            password=password,

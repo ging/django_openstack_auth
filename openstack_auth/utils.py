@@ -37,6 +37,10 @@ _PROJECT_CACHE = {}
 
 _TOKEN_TIMEOUT_MARGIN = getattr(settings, 'TOKEN_TIMEOUT_MARGIN', 0)
 
+ADMIN_CREDENTIALS = {'user': 'idm',
+                     'password': 'idm',
+                     'domain': 'Default'}
+
 """
 We need the request object to get the user, so we'll slightly modify the
 existing django.contrib.auth.get_user method. To do so we update the
@@ -174,6 +178,16 @@ def get_keystone_client():
         return client_v3
 
 
+def get_admin_keystone_client():
+    auth = get_password_auth_plugin(auth_url=settings.OPENSTACK_KEYSTONE_URL,
+                                    username=ADMIN_CREDENTIALS['user'],
+                                    password=ADMIN_CREDENTIALS['password'],
+                                    user_domain_name=ADMIN_CREDENTIALS['domain'],
+                                    verification_code=None)
+    sess = session.Session(auth=auth)
+    return get_keystone_client().Client(session=sess)
+
+
 def has_in_url_path(url, sub):
     """Test if the `sub` string is in the `url` path."""
     scheme, netloc, path, query, fragment = urlparse.urlsplit(url)
@@ -297,3 +311,11 @@ def set_response_cookie(response, cookie_name, cookie_value):
     now = timezone.now()
     expire_date = now + datetime.timedelta(days=365)
     response.set_cookie(cookie_name, cookie_value, expires=expire_date)
+
+
+
+def user_has_two_factor_enabled(username, domain):
+    keystone = get_admin_keystone_client()
+    res = keystone.two_factor.keys.check_activated_two_factor(username=username,
+                                                              domain=domain)
+    return res

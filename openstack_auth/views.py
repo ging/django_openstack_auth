@@ -146,16 +146,19 @@ def login(request, template_name=None, extra_context=None,
 
         # NOTE(garcianavalon) two factor support. If the user has two factor
         # enabled, cache the (username, password) and redirect to two_factor_login
-        # with the Key to retrieve them
-        
+        # with the Key to retrieve them      
         username = request.POST.get('username')
         password = request.POST.get('password')
-        cache_key = uuid.uuid4().hex
-        cache.set(cache_key, (username, password), 120)
+        # NOTE(federicofdez) get domain from context 
+        domain = 'default'
 
-        response = shortcuts.redirect('two_factor_login')
-        response['Location'] += '?k={k}'.format(k=cache_key)
-        return response
+        if utils.user_has_two_factor_enabled(username=username, domain=domain):
+            cache_key = uuid.uuid4().hex
+            cache.set(cache_key, (username, password), 120)
+
+            response = shortcuts.redirect('two_factor_login')
+            response['Location'] += '?k={k}'.format(k=cache_key)
+            return response
 
     else:
         form = functional.curry(form_class, initial=initial)
