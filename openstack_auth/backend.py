@@ -90,7 +90,10 @@ class KeystoneBackend(object):
         except (keystone_exceptions.Unauthorized,
                 keystone_exceptions.Forbidden,
                 keystone_exceptions.NotFound) as exc:
-            msg = _('Invalid user name or password.')
+            if verification_code:
+                msg = _('Invalid user name, password or verification code.')
+            else:
+                msg = _('Invalid user name or password.')
             LOG.debug(str(exc))
             raise exceptions.KeystoneAuthException(msg)
         except (keystone_exceptions.ClientException,
