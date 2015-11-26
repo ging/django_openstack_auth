@@ -149,8 +149,10 @@ def login(request, template_name=None, extra_context=None,
         # with the Key to retrieve them      
         username = request.POST.get('username')
         password = request.POST.get('password')
-        # NOTE(federicofdez) get domain from context 
-        domain = 'default'
+        default_domain = getattr(settings,
+                                 'OPENSTACK_KEYSTONE_DEFAULT_DOMAIN',
+                                 'Default')
+        domain = request.POST.get('domain', default_domain)
 
         if utils.user_has_two_factor_enabled(username=username, domain=domain):
             cache_key = uuid.uuid4().hex

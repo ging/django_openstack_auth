@@ -317,5 +317,5 @@ def set_response_cookie(response, cookie_name, cookie_value):
 def user_has_two_factor_enabled(username, domain):
     keystone = get_admin_keystone_client()
     res = keystone.two_factor.keys.check_activated_two_factor(username=username,
-                                                              domain=domain)
+                                                              domain_name=domain)
     return res
