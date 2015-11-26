@@ -139,12 +139,9 @@ class TwoFactorCodeForm(Login):
         k = self.request.GET.get('k')
         (username, password) = cache.get(k, ('', ''))
 
-        # delete cache
-        cache.delete(k)
-
         verification_code = self.cleaned_data.get('verification_code')
 
-        if not (username and password):
+        if not (username and password and verification_code):
             # Don't authenticate, just let the other validators handle it.
             return self.cleaned_data
 
@@ -157,6 +154,8 @@ class TwoFactorCodeForm(Login):
                                            verification_code=verification_code)
             msg = 'Login successful for user "%(username)s".' % \
                 {'username': username}
+            # delete cache
+            cache.delete(k)
             LOG.info(msg)
         except exceptions.KeystoneAuthException as exc:
             msg = 'Login failed for user "%(username)s".' % \

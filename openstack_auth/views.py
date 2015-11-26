@@ -85,6 +85,9 @@ def two_factor_login(request, template_name=None, extra_context=None,
         else:
             template_name = 'auth/two_factor_login.html'
 
+    if not request.GET.get('k', None) or not cache.get(request.GET.get('k'), None):
+        return shortcuts.redirect(settings.LOGIN_REDIRECT_URL)
+
     res = django_auth_views.login(request,
                                   template_name=template_name,
                                   authentication_form=form,
