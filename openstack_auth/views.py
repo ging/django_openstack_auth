@@ -37,6 +37,7 @@ from openstack_auth import forms
 from openstack_auth.forms import Login  # noqa
 from openstack_auth import user as auth_user
 from openstack_auth import utils
+from openstack_auth import exceptions
 
 try:
     is_safe_url = http.is_safe_url
@@ -88,11 +89,16 @@ def two_factor_login(request, template_name=None, extra_context=None,
     if not request.GET.get('k', None) or not cache.get(request.GET.get('k'), None):
         return shortcuts.redirect(settings.LOGIN_REDIRECT_URL)
 
-    res = django_auth_views.login(request,
-                                  template_name=template_name,
-                                  authentication_form=form,
-                                  extra_context=extra_context,
-                                  **kwargs)
+    username = cache.get(request.GET.get('k'))[0]
+
+    try:
+        res = django_auth_views.login(request,
+                            template_name=template_name,
+                            authentication_form=form,
+                            extra_context=extra_context,
+                            **kwargs)
+    except exceptions.KeystoneAuthException as exc:
+        return shortcuts.redirect('/auth/login/?error_code=1&user='+username)
 
     # NOTE(garcianavalon) we only allow one region to log in
     # just remove the cookie to avoid issues
@@ -183,6 +189,10 @@ def login(request, template_name=None, extra_context=None,
                                   authentication_form=form,
                                   extra_context=extra_context,
                                   **kwargs)
+
+    if request.GET.get('error_code', None) == '1':
+        res.context_data['form'].errors[u'__all__'] = u'Invalid user name, password or verification code.'
+        res.context_data['form'].fields['username'].initial = request.GET.get('user')
 
     # NOTE(garcianavalon) we only allow one region to log in
     # just remove the cookie to avoid issues

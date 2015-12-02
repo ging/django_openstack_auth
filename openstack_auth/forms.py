@@ -18,6 +18,7 @@ from django.contrib.auth import authenticate  # noqa
 from django.contrib.auth import forms as django_auth_forms
 from django.core.cache import cache
 from django import forms
+from django import shortcuts
 from django.utils.translation import ugettext_lazy as _
 from django.views.decorators.debug import sensitive_variables  # noqa
 
@@ -162,7 +163,7 @@ class TwoFactorCodeForm(Login):
             msg = 'Login failed for user "%(username)s".' % \
                 {'username': username}
             LOG.warning(msg)
-            raise forms.ValidationError(exc)
+            raise exc
         if hasattr(self, 'check_for_test_cookie'):  # Dropped in django 1.7
             self.check_for_test_cookie()
         return self.cleaned_data
