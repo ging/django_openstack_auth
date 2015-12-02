@@ -170,7 +170,7 @@ def login(request, template_name=None, extra_context=None,
 
         if utils.user_has_two_factor_enabled(username=username, domain=domain):
             cache_key = uuid.uuid4().hex
-            cache.set(cache_key, (username, password), 5)
+            cache.set(cache_key, (username, password), 120)
 
             response = shortcuts.redirect('two_factor_login')
             response['Location'] += '?k={k}'.format(k=cache_key)
