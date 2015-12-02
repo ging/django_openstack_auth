@@ -47,6 +47,11 @@ except AttributeError:
 
 LOG = logging.getLogger(__name__)
 
+LOGIN_ERROR_CODES = {
+    '1': u'Invalid user name, password or verification code.',
+    '2': u'Authentication time expired, please authenticate again.'
+}
+
 @sensitive_post_parameters()
 @csrf_protect
 @never_cache
@@ -87,7 +92,7 @@ def two_factor_login(request, template_name=None, extra_context=None,
             template_name = 'auth/two_factor_login.html'
 
     if not request.GET.get('k', None) or not cache.get(request.GET.get('k'), None):
-        return shortcuts.redirect(settings.LOGIN_REDIRECT_URL)
+        return shortcuts.redirect(settings.LOGIN_URL+'?error_code=2')
 
     username = cache.get(request.GET.get('k'))[0]
 
@@ -98,7 +103,7 @@ def two_factor_login(request, template_name=None, extra_context=None,
                             extra_context=extra_context,
                             **kwargs)
     except exceptions.KeystoneAuthException as exc:
-        return shortcuts.redirect('/auth/login/?error_code=1&user='+username)
+        return shortcuts.redirect(settings.LOGIN_URL + '?error_code=1&user='+username)
 
     # NOTE(garcianavalon) we only allow one region to log in
     # just remove the cookie to avoid issues
@@ -165,7 +170,7 @@ def login(request, template_name=None, extra_context=None,
 
         if utils.user_has_two_factor_enabled(username=username, domain=domain):
             cache_key = uuid.uuid4().hex
-            cache.set(cache_key, (username, password), 120)
+            cache.set(cache_key, (username, password), 5)
 
             response = shortcuts.redirect('two_factor_login')
             response['Location'] += '?k={k}'.format(k=cache_key)
@@ -190,8 +195,9 @@ def login(request, template_name=None, extra_context=None,
                                   extra_context=extra_context,
                                   **kwargs)
 
-    if request.GET.get('error_code', None) == '1':
-        res.context_data['form'].errors[u'__all__'] = u'Invalid user name, password or verification code.'
+    error_code = request.GET.get('error_code', None)
+    if error_code:
+        res.context_data['form'].errors[u'__all__'] = LOGIN_ERROR_CODES[error_code]
         res.context_data['form'].fields['username'].initial = request.GET.get('user')
 
     # NOTE(garcianavalon) we only allow one region to log in
