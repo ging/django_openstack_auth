@@ -25,5 +25,6 @@ urlpatterns = patterns(
     url(r"^logout/$", 'logout', name='logout'),
     url(r'^switch/(?P<tenant_id>[^/]+)/$', 'switch', name='switch_tenants'),
     url(r'^switch_services_region/(?P<region_name>[^/]+)/$', 'switch_region',
-        name='switch_services_region')
+        name='switch_services_region'),
+    url(r"^two_factor_login/$", "two_factor_login", name='two_factor_login'),
 )

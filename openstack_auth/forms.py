@@ -16,7 +16,9 @@ import logging
 from django.conf import settings
 from django.contrib.auth import authenticate  # noqa
 from django.contrib.auth import forms as django_auth_forms
+from django.core.cache import cache
 from django import forms
+from django import shortcuts
 from django.utils.translation import ugettext_lazy as _
 from django.views.decorators.debug import sensitive_variables  # noqa
 
@@ -112,6 +114,56 @@ class Login(django_auth_forms.AuthenticationForm):
                 {'username': username}
             LOG.warning(msg)
             raise forms.ValidationError(exc)
+        if hasattr(self, 'check_for_test_cookie'):  # Dropped in django 1.7
+            self.check_for_test_cookie()
+        return self.cleaned_data
+
+
+class TwoFactorCodeForm(Login):
+    verification_code = forms.CharField(
+        label=("Insert your code"),
+        widget=forms.TextInput(attrs={"autofocus": "autofocus"}))
+
+    def __init__(self, *args, **kwargs):
+        super(TwoFactorCodeForm, self).__init__(*args, **kwargs)
+        self.fields.keyOrder = ['verification_code']
+
+    @sensitive_variables()
+    def clean(self):
+        default_domain = getattr(settings,
+                                 'OPENSTACK_KEYSTONE_DEFAULT_DOMAIN',
+                                 'Default')
+        region = self.cleaned_data.get('region')
+        domain = self.cleaned_data.get('domain', default_domain)
+
+        # add the cached password and username
+        k = self.request.GET.get('k')
+        (username, password) = cache.get(k, ('', ''))
+
+        verification_code = self.cleaned_data.get('verification_code')
+
+        # delete cache
+        cache.delete(k)
+
+        if not (username and password and verification_code):
+            # Don't authenticate, just let the other validators handle it.
+            return self.cleaned_data
+
+        try:
+            self.user_cache = authenticate(request=self.request,
+                                           username=username,
+                                           password=password,
+                                           user_domain_name=domain,
+                                           auth_url=region,
+                                           verification_code=verification_code)
+            msg = 'Login successful for user "%(username)s".' % \
+                {'username': username}
+            LOG.info(msg)
+        except exceptions.KeystoneAuthException as exc:
+            msg = 'Login failed for user "%(username)s".' % \
+                {'username': username}
+            LOG.warning(msg)
+            raise exc
         if hasattr(self, 'check_for_test_cookie'):  # Dropped in django 1.7
             self.check_for_test_cookie()
         return self.cleaned_data

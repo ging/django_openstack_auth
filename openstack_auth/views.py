@@ -10,14 +10,17 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import logging
 import time
+import uuid
 
 import django
 from django.conf import settings
 from django.contrib import auth
 from django.contrib.auth.decorators import login_required  # noqa
 from django.contrib.auth import views as django_auth_views
+from django.core.cache import cache
 from django import shortcuts
 from django.utils import functional
 from django.utils import http
@@ -34,6 +37,7 @@ from openstack_auth import forms
 from openstack_auth.forms import Login  # noqa
 from openstack_auth import user as auth_user
 from openstack_auth import utils
+from openstack_auth import exceptions
 
 try:
     is_safe_url = http.is_safe_url
@@ -43,6 +47,83 @@ except AttributeError:
 
 LOG = logging.getLogger(__name__)
 
+LOGIN_ERROR_CODES = {
+    '1': u'Invalid user name, password or verification code.',
+    '2': u'Authentication time expired, please authenticate again.'
+}
+
+@sensitive_post_parameters()
+@csrf_protect
+@never_cache
+def two_factor_login(request, template_name=None, extra_context=None, 
+                             form_class=forms.TwoFactorCodeForm, **kwargs):
+    """Logs a user using two factor auth
+    """
+    if not request.is_ajax():
+        # If the user is already authenticated, redirect them to the
+        # dashboard straight away, unless the 'next' parameter is set as it
+        # usually indicates requesting access to a page that requires different
+        # permissions.
+        if (request.user.is_authenticated() and
+                auth.REDIRECT_FIELD_NAME not in request.GET and
+                auth.REDIRECT_FIELD_NAME not in request.POST):
+            return shortcuts.redirect(settings.LOGIN_REDIRECT_URL)
+
+    initial = {}
+    if request.method == "POST":
+        # NOTE(saschpe): Since https://code.djangoproject.com/ticket/15198,
+        # the 'request' object is passed directly to AuthenticationForm in
+        # django.contrib.auth.views#login:
+        if django.VERSION >= (1, 6):
+            form = functional.curry(form_class)
+        else:
+            form = functional.curry(form_class, request)
+    else:
+        form = functional.curry(form_class, initial=initial)
+
+    if extra_context is None:
+        extra_context = {'redirect_field_name': auth.REDIRECT_FIELD_NAME}
+
+    if not template_name:
+        if request.is_ajax():
+            template_name = 'auth/_two_factor_login.html'
+            extra_context['hide'] = True
+        else:
+            template_name = 'auth/two_factor_login.html'
+
+    if not request.GET.get('k', None) or not cache.get(request.GET.get('k'), None):
+        return shortcuts.redirect(settings.LOGIN_URL+'?error_code=2')
+
+    username = cache.get(request.GET.get('k'))[0]
+
+    try:
+        res = django_auth_views.login(request,
+                            template_name=template_name,
+                            authentication_form=form,
+                            extra_context=extra_context,
+                            **kwargs)
+    except exceptions.KeystoneAuthException as exc:
+        return shortcuts.redirect(settings.LOGIN_URL + '?error_code=1&user='+username)
+
+    # NOTE(garcianavalon) we only allow one region to log in
+    # just remove the cookie to avoid issues
+    # Save the region in the cookie, this is used as the default
+    # selected region next time the Login form loads.
+    # if request.method == "POST":
+    #     utils.set_response_cookie(res, 'login_region',
+    #                               request.POST.get('region', ''))
+
+    # Set the session data here because django's session key rotation
+    # will erase it if we set it earlier.
+    if request.user.is_authenticated():
+        auth_user.set_session_from_user(request, request.user)
+        regions = dict(form_class.get_region_choices())
+        region = request.user.endpoint
+        region_name = regions.get(region)
+        request.session['region_endpoint'] = region
+        request.session['region_name'] = region_name
+        request.session['last_activity'] = int(time.time())
+    return res
 
 @sensitive_post_parameters()
 @csrf_protect
@@ -76,6 +157,25 @@ def login(request, template_name=None, extra_context=None,
             form = functional.curry(form_class)
         else:
             form = functional.curry(form_class, request)
+
+        # NOTE(garcianavalon) two factor support. If the user has two factor
+        # enabled, cache the (username, password) and redirect to two_factor_login
+        # with the Key to retrieve them      
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        default_domain = getattr(settings,
+                                 'OPENSTACK_KEYSTONE_DEFAULT_DOMAIN',
+                                 'Default')
+        domain = request.POST.get('domain', default_domain)
+
+        if utils.user_has_two_factor_enabled(username=username, domain=domain):
+            cache_key = uuid.uuid4().hex
+            cache.set(cache_key, (username, password), 120)
+
+            response = shortcuts.redirect('two_factor_login')
+            response['Location'] += '?k={k}'.format(k=cache_key)
+            return response
+
     else:
         form = functional.curry(form_class, initial=initial)
 
@@ -94,6 +194,11 @@ def login(request, template_name=None, extra_context=None,
                                   authentication_form=form,
                                   extra_context=extra_context,
                                   **kwargs)
+
+    error_code = request.GET.get('error_code', None)
+    if error_code:
+        res.context_data['form'].errors[u'__all__'] = LOGIN_ERROR_CODES[error_code]
+        res.context_data['form'].fields['username'].initial = request.GET.get('user')
 
     # NOTE(garcianavalon) we only allow one region to log in
     # just remove the cookie to avoid issues

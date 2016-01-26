@@ -23,6 +23,7 @@ from django.utils import decorators
 from django.utils import timezone
 from keystoneclient.auth.identity import v2 as v2_auth
 from keystoneclient.auth.identity import v3 as v3_auth
+from keystoneclient.v3.contrib.two_factor import auth as two_factor_auth
 from keystoneclient.auth import token_endpoint
 from keystoneclient import session
 from keystoneclient.v2_0 import client as client_v2
@@ -35,6 +36,10 @@ LOG = logging.getLogger(__name__)
 _PROJECT_CACHE = {}
 
 _TOKEN_TIMEOUT_MARGIN = getattr(settings, 'TOKEN_TIMEOUT_MARGIN', 0)
+
+ADMIN_CREDENTIALS = {'user': 'idm',
+                     'password': 'idm',
+                     'domain': 'Default'}
 
 """
 We need the request object to get the user, so we'll slightly modify the
@@ -173,6 +178,16 @@ def get_keystone_client():
         return client_v3
 
 
+def get_admin_keystone_client():
+    auth = get_password_auth_plugin(auth_url=settings.OPENSTACK_KEYSTONE_URL,
+                                    username=ADMIN_CREDENTIALS['user'],
+                                    password=ADMIN_CREDENTIALS['password'],
+                                    user_domain_name=ADMIN_CREDENTIALS['domain'],
+                                    verification_code=None)
+    sess = session.Session(auth=auth)
+    return get_keystone_client().Client(session=sess)
+
+
 def has_in_url_path(url, sub):
     """Test if the `sub` string is in the `url` path."""
     scheme, netloc, path, query, fragment = urlparse.urlsplit(url)
@@ -211,12 +226,13 @@ def fix_auth_url_version(auth_url):
     return auth_url
 
 
-def get_password_auth_plugin(auth_url, username, password, user_domain_name):
+def get_password_auth_plugin(auth_url, username, password, user_domain_name, verification_code):
     if get_keystone_version() >= 3:
-        return v3_auth.Password(auth_url=auth_url,
-                                username=username,
-                                password=password,
-                                user_domain_name=user_domain_name)
+        return two_factor_auth.TwoFactor(auth_url=auth_url,
+                                         username=username,
+                                         password=password,
+                                         user_domain_name=user_domain_name,
+                                         verification_code=verification_code)
 
     else:
         return v2_auth.Password(auth_url=auth_url,
@@ -295,3 +311,11 @@ def set_response_cookie(response, cookie_name, cookie_value):
     now = timezone.now()
     expire_date = now + datetime.timedelta(days=365)
     response.set_cookie(cookie_name, cookie_value, expires=expire_date)
+
+
+
+def user_has_two_factor_enabled(username, domain):
+    keystone = get_admin_keystone_client()
+    res = keystone.two_factor.keys.check_activated_two_factor(username=username,
+                                                              domain_name=domain)
+    return res
