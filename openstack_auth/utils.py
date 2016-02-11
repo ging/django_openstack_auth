@@ -319,3 +319,11 @@ def user_has_two_factor_enabled(username, domain):
     res = keystone.two_factor.keys.check_activated_two_factor(username=username,
                                                               domain_name=domain)
     return res
+
+def remember_two_factor_device(username, domain):
+    keystone = get_admin_keystone_client()
+    return keystone.two_factor.keys.remember_device(username=username, domain=domain)
+
+def check_for_two_factor_device(user_id, device_id, device_token):
+    keystone = get_admin_keystone_client()
+    return keystone.two_factor.keys.check_for_device(user_id=user_id, device_id=device_id, device_token=device_token)

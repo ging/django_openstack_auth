@@ -123,10 +123,11 @@ class TwoFactorCodeForm(Login):
     verification_code = forms.CharField(
         label=("Insert your code"),
         widget=forms.TextInput(attrs={"autofocus": "autofocus"}))
+    remember_device = forms.BooleanField(label=("Don't ask for codes in this device"))
 
     def __init__(self, *args, **kwargs):
         super(TwoFactorCodeForm, self).__init__(*args, **kwargs)
-        self.fields.keyOrder = ['verification_code']
+        self.fields.keyOrder = ['verification_code', 'remember_device']
 
     @sensitive_variables()
     def clean(self):
@@ -141,6 +142,7 @@ class TwoFactorCodeForm(Login):
         (username, password) = cache.get(k, ('', ''))
 
         verification_code = self.cleaned_data.get('verification_code')
+        remember_device = self.cleaned_data.get('remember_device')
 
         # delete cache
         cache.delete(k)
@@ -159,6 +161,7 @@ class TwoFactorCodeForm(Login):
             msg = 'Login successful for user "%(username)s".' % \
                 {'username': username}
             LOG.info(msg)
+
         except exceptions.KeystoneAuthException as exc:
             msg = 'Login failed for user "%(username)s".' % \
                 {'username': username}
