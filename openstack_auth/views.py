@@ -14,6 +14,7 @@
 import logging
 import time
 import uuid
+import json
 
 import django
 from django.conf import settings
@@ -95,6 +96,7 @@ def two_factor_login(request, template_name=None, extra_context=None,
         return shortcuts.redirect(settings.LOGIN_URL+'?error_code=2')
 
     username = cache.get(request.GET.get('k'))[0]
+    domain = cache.get(request.GET.get('k'))[2]
 
     try:
         res = django_auth_views.login(request,
@@ -102,9 +104,17 @@ def two_factor_login(request, template_name=None, extra_context=None,
                             authentication_form=form,
                             extra_context=extra_context,
                             **kwargs)
-        import pdb; pdb.set_trace()
     except exceptions.KeystoneAuthException as exc:
         return shortcuts.redirect(settings.LOGIN_URL + '?error_code=1&user='+username)
+
+    if 'remember_device' in request.POST:
+        new_device_data = utils.remember_two_factor_device(username=username, domain=domain)
+        cookie_data = json.dumps({'device_id': new_device_data.device_id,
+                                  'device_token': new_device_data.device_token,
+                                  'user_id': new_device_data.user_id})
+        res.set_signed_cookie('two-factor-auth', cookie_data)
+    else:
+        res.delete_cookie('two-factor-auth')
 
     # NOTE(garcianavalon) we only allow one region to log in
     # just remove the cookie to avoid issues
@@ -169,22 +179,27 @@ def login(request, template_name=None, extra_context=None,
                                  'Default')
         domain = request.POST.get('domain', default_domain)
 
-        if utils.user_has_two_factor_enabled(username=username, domain=domain):
-            import pdb; pdb.set_trace()
-            device_data = request.COOKIES.get('two-factor-auth', None)
+        device_data = request.get_signed_cookie('two-factor-auth', None)
 
-            if device_data:
-                try:
-                    if device_data and utils.check_for_two_factor_device(user_id=device_data['user_id'],
-                                                                         device_id=device_data['device_id'],
-                                                                         device_token=device_data['device_token'])
-                except exceptions.KeystoneAuthException, TypeError:
-                    cache_key = uuid.uuid4().hex
-                    cache.set(cache_key, (username, password), 120)
+        if device_data:
+            try:
+                device_data = json.loads(device_data)
+                utils.check_for_two_factor_device(user_id=device_data['user_id'],
+                                                  device_id=device_data['device_id'],
+                                                  device_token=device_data['device_token'])
+                is_two_factor_device_valid = True
+            except (exceptions.KeystoneAuthException, keystone_exceptions.NotFound):
+                is_two_factor_device_valid = False
 
-                    response = shortcuts.redirect('two_factor_login')
-                    response['Location'] += '?k={k}'.format(k=cache_key)
-                    return response
+        if utils.user_has_two_factor_enabled(username=username, domain=domain) and \
+           (not device_data or is_two_factor_device_valid == False):
+            
+                cache_key = uuid.uuid4().hex
+                cache.set(cache_key, (username, password, domain), 120)
+
+                response = shortcuts.redirect('two_factor_login')
+                response['Location'] += '?k={k}'.format(k=cache_key)
+                return response
 
     else:
         form = functional.curry(form_class, initial=initial)
@@ -205,8 +220,15 @@ def login(request, template_name=None, extra_context=None,
                                   extra_context=extra_context,
                                   **kwargs)
 
-    if 'new_device_data' in locals():
-        res.set_cookie('two-factor-auth', new_device_data)
+    if 'device_data' in locals():
+        new_device_data = utils.remember_two_factor_device(username=username,
+                                                           domain=domain,
+                                                           device_id=device_data['device_id'],
+                                                           device_token=device_data['device_token'])
+        cookie_data = json.dumps({'device_id': new_device_data.device_id,
+                                  'device_token': new_device_data.device_token,
+                                  'user_id': new_device_data.user_id})
+        res.set_signed_cookie('two-factor-auth', cookie_data)
 
     error_code = request.GET.get('error_code', None)
     if error_code:

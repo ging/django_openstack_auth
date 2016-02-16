@@ -182,8 +182,7 @@ def get_admin_keystone_client():
     auth = get_password_auth_plugin(auth_url=settings.OPENSTACK_KEYSTONE_URL,
                                     username=ADMIN_CREDENTIALS['user'],
                                     password=ADMIN_CREDENTIALS['password'],
-                                    user_domain_name=ADMIN_CREDENTIALS['domain'],
-                                    verification_code=None)
+                                    user_domain_name=ADMIN_CREDENTIALS['domain'])
     sess = session.Session(auth=auth)
     return get_keystone_client().Client(session=sess)
 
@@ -226,13 +225,25 @@ def fix_auth_url_version(auth_url):
     return auth_url
 
 
-def get_password_auth_plugin(auth_url, username, password, user_domain_name, verification_code):
+def get_password_auth_plugin(auth_url, username, password, user_domain_name, verification_code=None, device_data=None):
     if get_keystone_version() >= 3:
-        return two_factor_auth.TwoFactor(auth_url=auth_url,
-                                         username=username,
-                                         password=password,
-                                         user_domain_name=user_domain_name,
-                                         verification_code=verification_code)
+        if verification_code:
+            return two_factor_auth.TwoFactor(auth_url=auth_url,
+                                             username=username,
+                                             password=password,
+                                             user_domain_name=user_domain_name,
+                                             verification_code=verification_code)
+        elif device_data:
+            return two_factor_auth.TwoFactor(auth_url=auth_url,
+                                             username=username,
+                                             password=password,
+                                             user_domain_name=user_domain_name,
+                                             device_data=device_data)
+        else:
+            return two_factor_auth.TwoFactor(auth_url=auth_url,
+                                             username=username,
+                                             password=password,
+                                             user_domain_name=user_domain_name)
 
     else:
         return v2_auth.Password(auth_url=auth_url,
@@ -316,13 +327,21 @@ def set_response_cookie(response, cookie_name, cookie_value):
 
 def user_has_two_factor_enabled(username, domain):
     keystone = get_admin_keystone_client()
-    res = keystone.two_factor.keys.check_activated_two_factor(username=username,
+    res = keystone.two_factor.keys.check_activated_two_factor(user_name=username,
                                                               domain_name=domain)
     return res
 
-def remember_two_factor_device(username, domain):
+def remember_two_factor_device(username, domain, device_id=None, device_token=None):
     keystone = get_admin_keystone_client()
-    return keystone.two_factor.keys.remember_device(username=username, domain=domain)
+
+    if device_id and device_token:
+        return keystone.two_factor.keys.remember_device(user_name=username,
+                                                        domain_name=domain,
+                                                        device_id=device_id,
+                                                        device_token=device_token)
+    else:
+        return keystone.two_factor.keys.remember_device(user_name=username,
+                                                        domain_name=domain)
 
 def check_for_two_factor_device(user_id, device_id, device_token):
     keystone = get_admin_keystone_client()
