@@ -343,6 +343,9 @@ def remember_two_factor_device(username, domain, device_id=None, device_token=No
         return keystone.two_factor.keys.remember_device(user_name=username,
                                                         domain_name=domain)
 
-def check_for_two_factor_device(user_id, device_id, device_token):
+def check_for_two_factor_device(username, domain, device_id, device_token):
     keystone = get_admin_keystone_client()
-    return keystone.two_factor.keys.check_for_device(user_id=user_id, device_id=device_id, device_token=device_token)
+    return keystone.two_factor.keys.check_for_device(user_name=username,
+                                                     domain_name=domain,
+                                                     device_id=device_id,
+                                                     device_token=device_token)

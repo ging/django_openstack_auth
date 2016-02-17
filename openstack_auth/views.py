@@ -50,7 +50,8 @@ LOG = logging.getLogger(__name__)
 
 LOGIN_ERROR_CODES = {
     '1': u'Invalid user name, password or verification code.',
-    '2': u'Authentication time expired, please authenticate again.'
+    '2': u'Authentication time expired, please authenticate again.',
+    '3': u'Something went wrong with your device cookie, please provide a verification code again.'
 }
 
 @sensitive_post_parameters()
@@ -110,11 +111,14 @@ def two_factor_login(request, template_name=None, extra_context=None,
     if 'remember_device' in request.POST:
         new_device_data = utils.remember_two_factor_device(username=username, domain=domain)
         cookie_data = json.dumps({'device_id': new_device_data.device_id,
-                                  'device_token': new_device_data.device_token,
-                                  'user_id': new_device_data.user_id})
+                                  'device_token': new_device_data.device_token})
         res.set_signed_cookie('two-factor-auth', cookie_data)
-    else:
+    elif request.method == 'POST':
         res.delete_cookie('two-factor-auth')
+
+    error_code = request.GET.get('error_code', None)
+    if error_code:
+        res.context_data['form'].errors[u'__all__'] = LOGIN_ERROR_CODES[error_code]
 
     # NOTE(garcianavalon) we only allow one region to log in
     # just remove the cookie to avoid issues
@@ -184,21 +188,29 @@ def login(request, template_name=None, extra_context=None,
         if device_data:
             try:
                 device_data = json.loads(device_data)
-                utils.check_for_two_factor_device(user_id=device_data['user_id'],
+                utils.check_for_two_factor_device(username=username,
+                                                  domain=domain,
                                                   device_id=device_data['device_id'],
                                                   device_token=device_data['device_token'])
                 is_two_factor_device_valid = True
-            except (exceptions.KeystoneAuthException, keystone_exceptions.NotFound):
+            except (keystone_exceptions.Forbidden, keystone_exceptions.NotFound) as e:
                 is_two_factor_device_valid = False
+                if isinstance(e, keystone_exceptions.Forbidden):
+                    error_code = 3
 
+        
         if utils.user_has_two_factor_enabled(username=username, domain=domain) and \
-           (not device_data or is_two_factor_device_valid == False):
+           (not device_data or not is_two_factor_device_valid):
             
                 cache_key = uuid.uuid4().hex
                 cache.set(cache_key, (username, password, domain), 120)
 
                 response = shortcuts.redirect('two_factor_login')
                 response['Location'] += '?k={k}'.format(k=cache_key)
+
+                if 'error_code' in locals():
+                    response['Location'] += '&error_code={e}'.format(e=error_code)
+
                 return response
 
     else:
@@ -220,14 +232,13 @@ def login(request, template_name=None, extra_context=None,
                                   extra_context=extra_context,
                                   **kwargs)
 
-    if 'device_data' in locals():
+    if 'is_two_factor_device_valid' in locals() and is_two_factor_device_valid:
         new_device_data = utils.remember_two_factor_device(username=username,
                                                            domain=domain,
                                                            device_id=device_data['device_id'],
                                                            device_token=device_data['device_token'])
         cookie_data = json.dumps({'device_id': new_device_data.device_id,
-                                  'device_token': new_device_data.device_token,
-                                  'user_id': new_device_data.user_id})
+                                  'device_token': new_device_data.device_token})
         res.set_signed_cookie('two-factor-auth', cookie_data)
 
     error_code = request.GET.get('error_code', None)
