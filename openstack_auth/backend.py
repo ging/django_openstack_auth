@@ -65,7 +65,7 @@ class KeystoneBackend(object):
             return None
 
     def authenticate(self, request=None, username=None, password=None,
-                     user_domain_name=None, auth_url=None, verification_code=None, device_data=None):
+                     user_domain_name=None, auth_url=None, verification_code=None):
         """Authenticates a user via the Keystone Identity API."""
         LOG.debug('Beginning user authentication for user "%s".' % username)
 
@@ -83,8 +83,7 @@ class KeystoneBackend(object):
                                                        username,
                                                        password,
                                                        user_domain_name,
-                                                       verification_code,
-                                                       device_data)
+                                                       verification_code)
 
         try:
             unscoped_auth_ref = unscoped_auth.get_access(session)

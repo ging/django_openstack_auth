@@ -12,7 +12,6 @@
 # limitations under the License.
 
 import logging
-import json
 
 from django.conf import settings
 from django.contrib.auth import authenticate  # noqa
@@ -24,7 +23,6 @@ from django.utils.translation import ugettext_lazy as _
 from django.views.decorators.debug import sensitive_variables  # noqa
 
 from openstack_auth import exceptions
-from openstack_auth import utils
 
 
 LOG = logging.getLogger(__name__)
@@ -103,22 +101,11 @@ class Login(django_auth_forms.AuthenticationForm):
             return self.cleaned_data
 
         try:
-            device_data = self.request.get_signed_cookie('two-factor-auth', None)
-
-            if device_data:
-                device_data = json.loads(device_data)
-                self.user_cache = authenticate(request=self.request,
-                                               username=username,
-                                               password=password,
-                                               user_domain_name=domain,
-                                               auth_url=region,
-                                               device_data=device_data)
-            else:
-                self.user_cache = authenticate(request=self.request,
-                                               username=username,
-                                               password=password,
-                                               user_domain_name=domain,
-                                               auth_url=region)
+            self.user_cache = authenticate(request=self.request,
+                                           username=username,
+                                           password=password,
+                                           user_domain_name=domain,
+                                           auth_url=region)
             msg = 'Login successful for user "%(username)s".' % \
                 {'username': username}
             LOG.info(msg)
@@ -136,11 +123,10 @@ class TwoFactorCodeForm(Login):
     verification_code = forms.CharField(
         label=("Insert your code"),
         widget=forms.TextInput(attrs={"autofocus": "autofocus"}))
-    remember_device = forms.BooleanField(label=("Don't ask for codes in this device"), required=False)
 
     def __init__(self, *args, **kwargs):
         super(TwoFactorCodeForm, self).__init__(*args, **kwargs)
-        self.fields.keyOrder = ['verification_code', 'remember_device']
+        self.fields.keyOrder = ['verification_code']
 
     @sensitive_variables()
     def clean(self):
@@ -152,7 +138,7 @@ class TwoFactorCodeForm(Login):
 
         # add the cached password and username
         k = self.request.GET.get('k')
-        (username, password, domain) = cache.get(k, ('', ''))
+        (username, password) = cache.get(k, ('', ''))
 
         verification_code = self.cleaned_data.get('verification_code')
 
@@ -173,7 +159,6 @@ class TwoFactorCodeForm(Login):
             msg = 'Login successful for user "%(username)s".' % \
                 {'username': username}
             LOG.info(msg)
-
         except exceptions.KeystoneAuthException as exc:
             msg = 'Login failed for user "%(username)s".' % \
                 {'username': username}
