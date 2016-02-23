@@ -51,7 +51,7 @@ LOG = logging.getLogger(__name__)
 LOGIN_ERROR_CODES = {
     '1': u'Invalid user name, password or verification code.',
     '2': u'Authentication time expired, please authenticate again.',
-    '3': u'Something went wrong with your device cookie, please provide a verification code again.'
+    '3': u'Something went wrong when verifying your device, please provide a code again.'
 }
 
 @sensitive_post_parameters()
