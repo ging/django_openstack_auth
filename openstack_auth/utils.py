@@ -40,6 +40,7 @@ _TOKEN_TIMEOUT_MARGIN = getattr(settings, 'TOKEN_TIMEOUT_MARGIN', 0)
 ADMIN_CREDENTIALS = {'user': 'idm',
                      'password': 'idm',
                      'domain': 'Default'}
+DEFAULT_APP_AVATAR = settings.STATIC_URL + '/dashboard/img/logos/medium/app.png'
 
 """
 We need the request object to get the user, so we'll slightly modify the
@@ -280,6 +281,22 @@ def get_project_list(*args, **kwargs):
     projects.sort(key=lambda project: project.name.lower())
     return projects
 
+def get_application(request):
+    manager = get_admin_keystone_client().oauth2.consumers
+
+    try:
+
+        application = manager.get(request.GET.get('client_id'))
+        if application:
+            avatar = getattr(application,'img_medium', None)
+            if avatar:
+                application.avatar = settings.MEDIA_URL + avatar
+            else:
+                application.avatar = DEFAULT_APP_AVATAR
+
+    except KeyError:
+        return None
+    return application
 
 def default_services_region(service_catalog, request=None):
     """Returns the first endpoint region for first non-identity service.

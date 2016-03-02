@@ -15,6 +15,7 @@ import logging
 import time
 import uuid
 import json
+import six
 
 import django
 from django.conf import settings
@@ -25,9 +26,11 @@ from django.core.cache import cache
 from django import shortcuts
 from django.utils import functional
 from django.utils import http
+from django.http.request import QueryDict
 from django.views.decorators.cache import never_cache  # noqa
 from django.views.decorators.csrf import csrf_protect  # noqa
 from django.views.decorators.debug import sensitive_post_parameters  # noqa
+from django.core.urlresolvers import reverse
 from keystoneclient.auth import token_endpoint
 from keystoneclient import exceptions as keystone_exceptions
 
@@ -82,6 +85,13 @@ def two_factor_login(request, template_name=None, extra_context=None,
             form = functional.curry(form_class, request)
     else:
         form = functional.curry(form_class, initial=initial)
+        application = utils.get_application(request)
+        if application:
+            extra_context = {}
+            extra_context['next'] = request.GET.get('next')
+            extra_context['show_application_details'] = True
+            extra_context['application'] = application
+            extra_context['redirect_field_name'] = auth.REDIRECT_FIELD_NAME
 
     if extra_context is None:
         extra_context = {'redirect_field_name': auth.REDIRECT_FIELD_NAME}
@@ -93,7 +103,7 @@ def two_factor_login(request, template_name=None, extra_context=None,
         else:
             template_name = 'auth/two_factor_login.html'
 
-    if not request.GET.get('k', None) or not cache.get(request.GET.get('k'), None):
+    if not request.GET.get('k') or not cache.get(request.GET.get('k'), None):
         return shortcuts.redirect(settings.LOGIN_URL+'?error_code=2')
 
     username = cache.get(request.GET.get('k'))[0]
@@ -116,7 +126,7 @@ def two_factor_login(request, template_name=None, extra_context=None,
     elif request.method == 'POST':
         res.delete_cookie('two-factor-auth')
 
-    error_code = request.GET.get('error_code', None)
+    error_code = request.GET.get('error_code')
     if error_code:
         res.context_data['form'].errors[u'__all__'] = LOGIN_ERROR_CODES[error_code]
 
@@ -159,7 +169,7 @@ def login(request, template_name=None, extra_context=None,
     # Get our initial region for the form.
     initial = {}
     current_region = request.session.get('region_endpoint', None)
-    requested_region = request.GET.get('region', None)
+    requested_region = request.GET.get('region')
     regions = dict(getattr(settings, "AVAILABLE_REGIONS", []))
     if requested_region in regions and requested_region != current_region:
         initial.update({'region': requested_region})
@@ -198,15 +208,20 @@ def login(request, template_name=None, extra_context=None,
                 if isinstance(e, keystone_exceptions.Forbidden):
                     error_code = 3
 
-        
         if utils.user_has_two_factor_enabled(username=username, domain=domain) and \
            (not device_data or not is_two_factor_device_valid):
-            
                 cache_key = uuid.uuid4().hex
                 cache.set(cache_key, (username, password, domain), 120)
-
-                response = shortcuts.redirect('two_factor_login')
-                response['Location'] += '?k={k}'.format(k=cache_key)
+                
+                if 'next' in request.POST:
+                    redirect_url = reverse('two_factor_login') + \
+                        '?k={k}'.format(k=cache_key) + \
+                        '&client_id={client_id}'.format(client_id=QueryDict(request.POST['next']).get('client_id')) + \
+                        '&next=' + http.urlquote_plus(request.POST['next'])
+                    response = shortcuts.redirect(redirect_url)
+                else:
+                    response = shortcuts.redirect('two_factor_login')
+                    response['Location'] += '?k={k}'.format(k=cache_key)
 
                 if 'error_code' in locals():
                     response['Location'] += '&error_code={e}'.format(e=error_code)
@@ -241,7 +256,7 @@ def login(request, template_name=None, extra_context=None,
                                   'device_token': new_device_data.device_token})
         res.set_signed_cookie('two-factor-auth', cookie_data)
 
-    error_code = request.GET.get('error_code', None)
+    error_code = request.GET.get('error_code')
     if error_code:
         res.context_data['form'].errors[u'__all__'] = LOGIN_ERROR_CODES[error_code]
         res.context_data['form'].fields['username'].initial = request.GET.get('user')
