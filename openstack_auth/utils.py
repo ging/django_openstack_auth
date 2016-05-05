@@ -30,6 +30,8 @@ from keystoneclient.v2_0 import client as client_v2
 from keystoneclient.v3 import client as client_v3
 from six.moves.urllib import parse as urlparse
 
+from openstack_dashboard.local import local_settings
+
 
 LOG = logging.getLogger(__name__)
 
@@ -37,9 +39,6 @@ _PROJECT_CACHE = {}
 
 _TOKEN_TIMEOUT_MARGIN = getattr(settings, 'TOKEN_TIMEOUT_MARGIN', 0)
 
-ADMIN_CREDENTIALS = {'user': 'idm',
-                     'password': 'idm',
-                     'domain': 'Default'}
 DEFAULT_APP_AVATAR = settings.STATIC_URL + '/dashboard/img/logos/medium/app.png'
 
 """
@@ -180,10 +179,11 @@ def get_keystone_client():
 
 
 def get_admin_keystone_client():
+    credentials = getattr(local_settings, 'IDM_USER_CREDENTIALS')
     auth = get_password_auth_plugin(auth_url=settings.OPENSTACK_KEYSTONE_URL,
-                                    username=ADMIN_CREDENTIALS['user'],
-                                    password=ADMIN_CREDENTIALS['password'],
-                                    user_domain_name=ADMIN_CREDENTIALS['domain'])
+                                    username=credentials['username'],
+                                    password=credentials['password'],
+                                    user_domain_name='Default')
     sess = session.Session(auth=auth)
     return get_keystone_client().Client(session=sess)
 
