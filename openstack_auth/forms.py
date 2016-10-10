@@ -140,6 +140,7 @@ class TwoFactorCodeForm(Login):
 
     def __init__(self, *args, **kwargs):
         super(TwoFactorCodeForm, self).__init__(*args, **kwargs)
+        [self.fields.pop(element) for element in ['username', 'password']]
         self.fields.keyOrder = ['verification_code', 'remember_device']
 
     @sensitive_variables()
